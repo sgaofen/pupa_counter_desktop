@@ -297,7 +297,15 @@ ipcMain.handle("scanner:scan", async (_evt, params) => {
   return res;
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // Pre-warm the CNN daemon so first scan doesn't pay torch-import +
+  // model-load cost (~2s) at click time. If warmup fails here we swallow
+  // it — real errors will surface again on the first actual detect.
+  startCnnWorker().catch((err) => {
+    console.warn("[cnn-worker] pre-warm failed:", err.message);
+  });
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

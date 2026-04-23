@@ -83,6 +83,15 @@ export function ScanView({ onNavigate, onToast }: Props) {
     await loadAndDetect(handle);
   };
 
+  const handleLoadFromFile = async () => {
+    if (!window.pupa) return;
+    const path = await window.pupa.dialog.openImage();
+    if (!path) return;
+    const handle = await loadScanFromPath(path);
+    if (!handle) return;
+    await loadAndDetect(handle);
+  };
+
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragActive(false);
@@ -279,7 +288,7 @@ export function ScanView({ onNavigate, onToast }: Props) {
           {state === "empty" ? (
             <div
               className="drop-zone"
-              onClick={handleNewScan}
+              onClick={handleLoadFromFile}
               style={{
                 cursor: "pointer",
                 background: dragActive ? "var(--accent-soft)" : undefined,
@@ -288,9 +297,11 @@ export function ScanView({ onNavigate, onToast }: Props) {
               <div className="inner">
                 {Icons.upload}
                 <div className="primary">
-                  {dragActive ? "Drop file to analyze" : "Drop a scan here or click New scan"}
+                  {dragActive ? "Drop file to analyze" : "Drag a scan here, or click to browse"}
                 </div>
-                <div className="secondary">Accepts .png, .jpg — TIFF support TBD</div>
+                <div className="secondary">
+                  Accepts .png / .jpg — or use <b>New scan</b> in the toolbar to trigger the scanner
+                </div>
               </div>
             </div>
           ) : pendingScan?.imageDataUrl && det ? (
@@ -324,7 +335,12 @@ export function ScanView({ onNavigate, onToast }: Props) {
 
         {/* Toolbar */}
         <div className="middle-actions">
-          <button className="btn" onClick={handleNewScan}>{Icons.folder} New scan</button>
+          <button className="btn" onClick={handleNewScan} title="Trigger the connected scanner">
+            {Icons.upload} New scan
+          </button>
+          <button className="btn" onClick={handleLoadFromFile} title="Pick an existing PNG/JPG/TIFF from disk">
+            {Icons.folder} Load file…
+          </button>
           <button className="btn btn-primary" onClick={handleProcess} disabled={!pendingScan || processing}>
             {processing ? "Processing…" : <>Process {Icons.arrowRight}</>}
           </button>
