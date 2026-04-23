@@ -39,6 +39,7 @@ export function ScanView({ onNavigate, onToast }: Props) {
     { kind: "in" | "out" | "fit"; nonce: number } | null
   >(null);
   const [originalCnn, setOriginalCnn] = useState<Pupa[] | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const state: "empty" | "processing" | "detected" =
     !pendingScan ? "empty" : pendingScan.detection ? "detected" : "processing";
@@ -78,6 +79,46 @@ export function ScanView({ onNavigate, onToast }: Props) {
     const handle = await scanNow();
     if (!handle) return;
     await loadAndDetect(handle);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    // Electron exposes the absolute filesystem path on dropped File objects.
+    // In browser-preview mode this is empty, so fall back to the blob URL.
+    const path = (file as File & { path?: string }).path;
+    if (path) {
+      const handle = await loadScanFromPath(path);
+      if (handle) await loadAndDetect(handle);
+      return;
+    }
+    const dataUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = async () => {
+      await loadAndDetect({
+        path: file.name,
+        dataUrl,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+    };
+    img.src = dataUrl;
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (Array.from(e.dataTransfer.types).includes("Files")) {
+      e.preventDefault();
+      if (!dragActive) setDragActive(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    // Only clear when the cursor actually leaves the drop target, not when
+    // it moves onto a child element.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragActive(false);
   };
 
   const handleLoadDemo = async () => {
@@ -174,7 +215,13 @@ export function ScanView({ onNavigate, onToast }: Props) {
       </aside>
 
       <section className="middle">
-        <div className="card scan-card">
+        <div
+          className="card scan-card"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          style={dragActive ? { outline: "2px dashed var(--accent)", outlineOffset: -2 } : undefined}
+        >
           <div className="card-head">
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div className="card-title">Current scan</div>
@@ -228,10 +275,19 @@ export function ScanView({ onNavigate, onToast }: Props) {
 
           {/* Main canvas region */}
           {state === "empty" ? (
-            <div className="drop-zone" onClick={handleNewScan} style={{ cursor: "pointer" }}>
+            <div
+              className="drop-zone"
+              onClick={handleNewScan}
+              style={{
+                cursor: "pointer",
+                background: dragActive ? "var(--accent-soft)" : undefined,
+              }}
+            >
               <div className="inner">
                 {Icons.upload}
-                <div className="primary">Drop a scan here or click New scan</div>
+                <div className="primary">
+                  {dragActive ? "Drop file to analyze" : "Drop a scan here or click New scan"}
+                </div>
                 <div className="secondary">Accepts .png, .jpg — TIFF support TBD</div>
               </div>
             </div>
