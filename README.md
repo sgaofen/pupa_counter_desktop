@@ -1,15 +1,18 @@
 # Pupa Counter — Desktop app
 
 Electron + React + TypeScript shell for the Long Lab pupa counter
-pipeline. The backing CNN lives in a sister repo:
-<https://github.com/sgaofen/pupa_counter_v6>.
+pipeline. Wraps the real V12 CNN + classifier v5 living in the sister
+repo [pupa_counter_v6](https://github.com/sgaofen/pupa_counter_v6).
 
-This app is the **user-facing desktop wrapper** Sarah / Anthony / Stephen
-will use in the lab: scan → detect → edit if needed → save to a local
-database → browse and export.
+This is the **user-facing desktop wrapper** Sarah / Anthony / Stephen
+use in the lab: scan → detect → hand-edit → save to a local database →
+browse and export.
 
-![designed in Claude Design, not a screenshot] Designed against the
-`Pupa Counter.html` mockup emitted by Claude Design on 2026-04-22.
+> **New agent picking this up?** Read
+> [`HANDOFF_2026-04-23.md`](./HANDOFF_2026-04-23.md) first — it has
+> the clone-and-run steps, the path configuration, the scanner
+> integration spec, and everywhere you'd want to look before touching
+> code.
 
 ## Status (2026-04-23)
 
