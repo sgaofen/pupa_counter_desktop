@@ -4,6 +4,11 @@ A lab-facing Electron app that drives a flatbed scanner, runs a CNN to
 count silkworm pupae on the scanned page, and lets you hand-correct the
 detections before saving them to a per-session database.
 
+Backend (since 2026-04-30): V12 CNN + `clf_v6_md5` classifier with
+`min_distance=5` peak extraction — F1 = 99.95 % on self-eval, 99.60 %
+on honest leave-one-scan-out CV. Lives in the sister repo
+[`pupa_counter_v6`](https://github.com/sgaofen/pupa_counter_v6).
+
 ```
    physical paper                    auto-detect best torch backend
    on scanner glass                  per-machine (CUDA / MPS / XPU /
@@ -11,7 +16,7 @@ detections before saving them to a per-session database.
         ▼                                       │
   ┌──────────────────┐    PNG     ┌──────────────────────┐
   │  WIA via Power-  │──────────► │  Python daemon, v12  │
-  │  Shell COM       │            │  CNN + clf v5        │
+  │  Shell COM       │            │  CNN + clf v6_md5    │
   │  (Win 10/11)     │            │  (persistent worker) │
   └──────────────────┘            └──────────┬───────────┘
                                              │ JSON-lines
@@ -216,9 +221,10 @@ src/
 
 [`pupa_counter_v6`](https://github.com/sgaofen/pupa_counter_v6) holds:
 
-- The TinyUNet CNN (466K params, F1 99.46% w/ classifier filter)
+- The TinyUNet CNN (466K params, F1 99.95% w/ classifier filter as of
+  2026-04-30, F1 99.60% on honest leave-one-scan-out CV)
 - Model weights (`pupa_counter_v12.pt`, ~1.9 MB)
-- Classifier (`peak_filter_clf.pkl`, sklearn 1.6.1 GBM)
+- Classifier (`peak_filter_clf_v6_md5.pkl`, sklearn 1.6.1 GBM)
 - The persistent JSON-lines daemon this app spawns
 - `scripts/setup_venv.py` for one-shot multi-machine bootstrap
 
