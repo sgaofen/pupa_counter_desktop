@@ -27,6 +27,20 @@ const CNN_SCRIPT =
 const CNN_DAEMON_SCRIPT =
   process.env.PUPA_DAEMON || path.join(V6_ROOT_DEFAULT, "pupa_counter_daemon.py");
 
+// Inference config — points the daemon at the LiDE 300 model trained
+// 2026-05-01 (F1 = 99.66 % on the 6-scan self-eval). Override any of
+// these by exporting the same env var before launching the desktop app.
+const LIDE_MODEL = path.join(V6_ROOT_DEFAULT, "model", "pupa_counter_lide300.pt");
+const LIDE_CLF   = path.join(V6_ROOT_DEFAULT, "model", "peak_filter_clf_lide300.pkl");
+const DAEMON_ENV = {
+  PUPA_MODEL_PATH:   process.env.PUPA_MODEL_PATH   || LIDE_MODEL,
+  PUPA_CLF_PATH:     process.env.PUPA_CLF_PATH     || LIDE_CLF,
+  PUPA_PEAK_THR:     process.env.PUPA_PEAK_THR     || "0.40",
+  PUPA_MIN_DIST:     process.env.PUPA_MIN_DIST     || "4",
+  PUPA_BBOX_CROP:    process.env.PUPA_BBOX_CROP    || "1",
+  PUPA_CLF_PROB_THR: process.env.PUPA_CLF_PROB_THR || "0.50",
+};
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1480,
@@ -52,20 +66,141 @@ function createWindow() {
 }
 
 // --- IPC handlers for file operations + session persistence ---
-const SESSION_PATH = () => path.join(app.getPath("userData"), "session.json");
+//
+// Session model: each session lives in its own JSON file under
+//   <userData>/sessions/<sessionId>.json
+// On first launch we migrate the legacy single-file <userData>/session.json
+// into the new layout so existing data isn't lost.
+const SESSIONS_DIR = () => path.join(app.getPath("userData"), "sessions");
+const LEGACY_SESSION_PATH = () => path.join(app.getPath("userData"), "session.json");
 
-ipcMain.handle("session:load", async () => {
+function safeId(id) {
+  // Filesystem-safe session id (drop everything that's not alnum / dash / underscore).
+  return String(id || "").replace(/[^A-Za-z0-9_\-]/g, "_").slice(0, 64) || "session";
+}
+function sessionFile(id) {
+  return path.join(SESSIONS_DIR(), `${safeId(id)}.json`);
+}
+
+async function ensureSessionsDir() {
+  await fs.promises.mkdir(SESSIONS_DIR(), { recursive: true });
+}
+
+// Run once at startup — moves <userData>/session.json into sessions/<id>.json
+// the first time a user upgrades from the single-file era.
+async function migrateLegacySessionOnce() {
+  const legacy = LEGACY_SESSION_PATH();
   try {
-    const raw = await fs.promises.readFile(SESSION_PATH(), "utf-8");
-    return JSON.parse(raw);
+    const raw = await fs.promises.readFile(legacy, "utf-8");
+    const data = JSON.parse(raw);
+    const id = data?.sessionId || `legacy_${new Date().toISOString().slice(0, 10)}`;
+    const dest = sessionFile(id);
+    if (!fs.existsSync(dest)) {
+      await fs.promises.writeFile(dest, JSON.stringify(data, null, 2), "utf-8");
+    }
+    await fs.promises.rename(legacy, legacy + ".migrated");
+  } catch {
+    // No legacy file (or already migrated) — fine.
+  }
+}
+
+ipcMain.handle("session:list", async () => {
+  await ensureSessionsDir();
+  const files = (await fs.promises.readdir(SESSIONS_DIR())).filter((f) => f.endsWith(".json"));
+  const out = (await Promise.all(files.map(async (f) => {
+    const full = path.join(SESSIONS_DIR(), f);
+    try {
+      const [stat, raw] = await Promise.all([
+        fs.promises.stat(full),
+        fs.promises.readFile(full, "utf-8"),
+      ]);
+      const data = JSON.parse(raw);
+      const rounds = Array.isArray(data.rounds) ? data.rounds : [];
+      return {
+        sessionId: data.sessionId || f.replace(/\.json$/, ""),
+        startedAt: data.startedAt || "",
+        operator: data.operator || "",
+        experiment: data.experiment || "",
+        rounds: rounds.length,
+        scans: rounds.reduce((a, r) => a + (Array.isArray(r.scans) ? r.scans.length : 0), 0),
+        mtimeMs: stat.mtimeMs,
+      };
+    } catch {
+      return null;  // unreadable files skipped instead of crashing the picker
+    }
+  }))).filter(Boolean);
+  out.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return out;
+});
+
+ipcMain.handle("session:load", async (_evt, sessionId) => {
+  await ensureSessionsDir();
+  // No id → most-recently-modified session (also covers fresh-install path).
+  if (!sessionId) {
+    const files = await fs.promises.readdir(SESSIONS_DIR());
+    let pick = null;
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      const full = path.join(SESSIONS_DIR(), f);
+      const stat = await fs.promises.stat(full);
+      if (!pick || stat.mtimeMs > pick.mtimeMs) pick = { full, mtimeMs: stat.mtimeMs };
+    }
+    if (!pick) return null;
+    return JSON.parse(await fs.promises.readFile(pick.full, "utf-8"));
+  }
+  try {
+    return JSON.parse(await fs.promises.readFile(sessionFile(sessionId), "utf-8"));
   } catch {
     return null;
   }
 });
 
 ipcMain.handle("session:save", async (_evt, data) => {
-  await fs.promises.writeFile(SESSION_PATH(), JSON.stringify(data, null, 2), "utf-8");
+  await ensureSessionsDir();
+  if (!data?.sessionId) throw new Error("session:save requires data.sessionId");
+  await fs.promises.writeFile(sessionFile(data.sessionId),
+                               JSON.stringify(data, null, 2), "utf-8");
   return true;
+});
+
+ipcMain.handle("session:create", async (_evt, partial) => {
+  await ensureSessionsDir();
+  const now = new Date();
+  // Auto-name `sess_YYYY-MM-DD-HH-MM-SS`. Second-precision stamp + atomic
+  // wx-flag write means we never collide and never block on existsSync.
+  const stamp = now.toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const id = safeId(partial?.sessionId || `sess_${stamp}`);
+  const startedAt = partial?.startedAt || now.toLocaleString("sv-SE",
+    { timeZone: "America/Los_Angeles" });
+  const data = {
+    sessionId: id,
+    operator: partial?.operator || "",
+    experiment: partial?.experiment || "",
+    startedAt,
+    rounds: [{ roundId: "r1", roundNumber: 1, startedAt, scans: [] }],
+  };
+  try {
+    await fs.promises.writeFile(sessionFile(id),
+                                 JSON.stringify(data, null, 2), { encoding: "utf-8", flag: "wx" });
+  } catch (err) {
+    if (err.code !== "EEXIST") throw err;
+    // Same-second collision: tack on millis and try once more.
+    const id2 = `${id}_${now.getMilliseconds()}`;
+    data.sessionId = id2;
+    await fs.promises.writeFile(sessionFile(id2),
+                                 JSON.stringify(data, null, 2), { encoding: "utf-8", flag: "wx" });
+  }
+  return data;
+});
+
+ipcMain.handle("session:delete", async (_evt, sessionId) => {
+  if (!sessionId) return false;
+  try {
+    await fs.promises.unlink(sessionFile(sessionId));
+    return true;
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.handle("dialog:openImage", async () => {
@@ -143,6 +278,7 @@ function startCnnWorker() {
   cnnWorker.starting = new Promise((resolve, reject) => {
     const proc = spawn(PYTHON_BIN, [CNN_DAEMON_SCRIPT], {
       cwd: path.dirname(CNN_DAEMON_SCRIPT),
+      env: { ...process.env, ...DAEMON_ENV },
     });
     cnnWorker.proc = proc;
 
@@ -315,6 +451,9 @@ ipcMain.handle("scanner:scan", async (_evt, params) => {
 
 app.whenReady().then(() => {
   createWindow();
+  migrateLegacySessionOnce().catch((err) => {
+    console.warn("[session] legacy migration failed:", err.message);
+  });
   // Pre-warm the CNN daemon so first scan doesn't pay torch-import +
   // model-load cost (~2s) at click time. If warmup fails here we swallow
   // it — real errors will surface again on the first actual detect.

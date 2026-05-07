@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Icons } from "../components/icons";
 import { ScanImage } from "../components/ScanImage";
 import { EditCanvas } from "../components/EditCanvas";
-import { useSessionStore } from "../store/sessionStore";
+import { useSessionStore, isoNow } from "../store/sessionStore";
 import { scanNow, loadScanFromPath, listDemoScans } from "../adapters/scannerAdapter";
 import { runDetection, CnnUnavailableError } from "../adapters/cnnAdapter";
 import type { TabName } from "../components/TopNav";
@@ -384,7 +384,7 @@ export function ScanView({ onNavigate, onToast }: Props) {
                   else setSessionOperator(e.target.value);
                 }} /></div>
             <div className="field"><label>Date & time</label>
-              <input className="input mono" readOnly value={new Date().toISOString().slice(0, 16).replace("T", " ")} /></div>
+              <input className="input mono" readOnly value={isoNow().slice(0, 16)} /></div>
             <div className="field"><label>File path</label>
               <input className="input mono" readOnly
                 value={pendingScan?.imagePath ?? "—"}

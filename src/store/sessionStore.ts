@@ -1,8 +1,17 @@
 import { create } from "zustand";
 import type { DetectionResult, Pupa, RankBand, Round, ScanRecord, Session } from "../types";
 
-function isoNow() {
-  return new Date().toISOString().slice(0, 19).replace("T", " ");
+// sv-SE locale yields "YYYY-MM-DD HH:MM:SS"; pinned to LA wall-clock so
+// log timestamps stay readable for the lab even when scans happen on a
+// laptop set to a different timezone.
+const LA_DT_FMT = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "America/Los_Angeles",
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+  hour12: false,
+});
+export function isoNow(): string {
+  return LA_DT_FMT.format(new Date()).replace(",", "");
 }
 
 function bandFor(rankPct: number): RankBand {
@@ -170,6 +179,7 @@ interface SessionState {
   toggleDark: () => void;
   setToast: (msg: string | null) => void;
   startNewRound: () => void;
+  loadSession: (data: Session) => void;
 
   beginPendingScan: (imagePath: string, imageDataUrl: string | null) => void;
   setDetection: (d: DetectionResult) => void;
@@ -190,6 +200,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setExperiment: (name) => set((s) => ({ session: { ...s.session, experiment: name } })),
   toggleDark: () => set((s) => ({ darkMode: !s.darkMode })),
   setToast: (msg) => set({ toast: msg }),
+
+  loadSession: (data) => {
+    // Pick the latest round if any; else r1. Clears any in-flight pending
+    // scan so it can't accidentally land on the wrong session.
+    const rid = data.rounds[data.rounds.length - 1]?.roundId
+              ?? data.rounds[0]?.roundId
+              ?? "r1";
+    set({ session: data, currentRoundId: rid, pendingScan: null });
+  },
 
   startNewRound: () => {
     const { session } = get();

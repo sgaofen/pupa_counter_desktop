@@ -26,7 +26,7 @@ export function App() {
       try {
         const saved = await window.pupa?.session.load?.();
         if (!cancelled && saved && saved.sessionId && Array.isArray(saved.rounds)) {
-          useSessionStore.setState({ session: saved });
+          useSessionStore.getState().loadSession(saved);
         }
       } catch (err) {
         console.warn("[session] hydrate failed:", err);
@@ -82,6 +82,7 @@ export function App() {
           darkMode={darkMode}
           onToggleDark={toggleDark}
           operatorInitials={initials || "SR"}
+          onToast={setToast}
         />
         {tab === "Scan" && <ScanView onNavigate={setTab} onToast={setToast} />}
         {tab === "Database" && <DatabaseView />}

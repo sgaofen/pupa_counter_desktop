@@ -3,8 +3,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("pupa", {
   session: {
-    load: () => ipcRenderer.invoke("session:load"),
+    load: (sessionId) => ipcRenderer.invoke("session:load", sessionId),
     save: (data) => ipcRenderer.invoke("session:save", data),
+    list: () => ipcRenderer.invoke("session:list"),
+    create: (partial) => ipcRenderer.invoke("session:create", partial),
+    delete: (sessionId) => ipcRenderer.invoke("session:delete", sessionId),
   },
   dialog: {
     openImage: () => ipcRenderer.invoke("dialog:openImage"),

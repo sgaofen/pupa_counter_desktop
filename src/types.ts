@@ -74,8 +74,11 @@ declare global {
   interface Window {
     pupa?: {
       session: {
-        load: () => Promise<Session | null>;
+        load: (sessionId?: string) => Promise<Session | null>;
         save: (data: Session) => Promise<boolean>;
+        list: () => Promise<SessionSummary[]>;
+        create: (partial?: Partial<Session>) => Promise<Session>;
+        delete: (sessionId: string) => Promise<boolean>;
       };
       dialog: {
         openImage: () => Promise<string | null>;
@@ -110,6 +113,16 @@ declare global {
       };
     };
   }
+}
+
+export interface SessionSummary {
+  sessionId: string;
+  startedAt: string;
+  operator: string;
+  experiment: string;
+  rounds: number;
+  scans: number;
+  mtimeMs: number;
 }
 
 export interface ScannerDevice {

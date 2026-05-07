@@ -1,6 +1,6 @@
 {
   "name": "pupa-counter-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Desktop app for the Long Lab pupa counter — scans, counts, manually edits, and persists pupae detections.",
   "private": true,
   "main": "electron/main.js",

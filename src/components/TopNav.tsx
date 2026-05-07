@@ -1,5 +1,6 @@
 import React from "react";
 import { Icons } from "./icons";
+import { SessionPicker } from "./SessionPicker";
 
 export type TabName = "Scan" | "Database" | "Settings";
 const TABS: TabName[] = ["Scan", "Database", "Settings"];
@@ -10,9 +11,10 @@ interface Props {
   darkMode: boolean;
   onToggleDark: () => void;
   operatorInitials: string;
+  onToast?: (msg: string) => void;
 }
 
-export function TopNav({ activeTab, onTabChange, darkMode, onToggleDark, operatorInitials }: Props) {
+export function TopNav({ activeTab, onTabChange, darkMode, onToggleDark, operatorInitials, onToast }: Props) {
   return (
     <div className="topnav">
       <div className="brand">
@@ -32,6 +34,7 @@ export function TopNav({ activeTab, onTabChange, darkMode, onToggleDark, operato
         ))}
       </div>
       <div className="topnav-right">
+        <SessionPicker onToast={onToast} />
         <button className="iconbtn" title="Toggle theme" onClick={onToggleDark}>
           {darkMode ? Icons.sun : Icons.moon}
         </button>

@@ -47,23 +47,24 @@ export async function scanNow(paramsOverride?: Partial<ScanParams>): Promise<Sca
   const settings = loadScannerSettings();
   let deviceId = paramsOverride?.deviceId ?? settings?.deviceId ?? "";
 
-  // First-run convenience: auto-pick the first live WIA device if the user
-  // hasn't gone through Settings yet. We cache it so subsequent scans hit the
-  // same hardware without enumerating every time.
-  if (!deviceId) {
+  // Verify the saved deviceId against the live WIA enumeration. Saved IDs
+  // go stale across re-plug / driver swaps (e.g. eSCL → legacy WIA), and a
+  // stale ID would 404 in scanner:scan. Caller-supplied overrides skip this.
+  if (!paramsOverride?.deviceId) {
     const list = await window.pupa.scanner.listDevices();
-    if (list.length > 0) {
+    const stillValid = deviceId && list.some((d) => d.id === deviceId);
+    if (!stillValid && list.length > 0) {
       deviceId = list[0].id;
       saveScannerSettings({
         deviceId,
         dpi: settings?.dpi ?? 300,
         mode: settings?.mode ?? "color",
       });
+    } else if (!stillValid) {
+      deviceId = "";
     }
   }
 
-  // Still no device (none attached) — fall back to file picker so the
-  // downstream pipeline remains testable with sample images.
   if (!deviceId) return await pickerFallback();
 
   const savedOutDir = localStorage.getItem("pupa.saveDir.v1") || undefined;
