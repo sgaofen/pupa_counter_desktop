@@ -10,28 +10,32 @@ const { spawn } = require("child_process");
 
 const DEV = !app.isPackaged;
 
-// --- Local Python pipeline paths (replace with bundled resources when we
-// ship a packaged .dmg / .exe; for dev we just point at the local repo). ---
-// Defaults assume the sister repo `pupa_counter_v6` sits next to this one,
-// with its own `.venv`. Works cross-platform (macOS/Linux uses .venv/bin,
-// Windows uses .venv/Scripts). Override any of these with env vars when
-// the layout differs.
+// --- Local Python pipeline paths ---
+// In production (packaged build) every Python artefact ships inside
+// resources/python-pipeline/ — no sister-repo or system Python needed.
+// In dev we still point at the live `pupa_counter_v6` next to this repo
+// so source edits (model swap, daemon tweak) reload immediately.
 const IS_WIN = process.platform === "win32";
 const V6_ROOT_DEFAULT = path.resolve(__dirname, "..", "..", "pupa_counter_v6");
-const VENV_PY_DEFAULT = IS_WIN
-  ? path.join(V6_ROOT_DEFAULT, ".venv", "Scripts", "python.exe")
-  : path.join(V6_ROOT_DEFAULT, ".venv", "bin", "python");
-const PYTHON_BIN = process.env.PUPA_PYTHON || VENV_PY_DEFAULT;
+const PIPELINE_ROOT = DEV
+  ? V6_ROOT_DEFAULT
+  : path.join(process.resourcesPath, "python-pipeline");
+const PYTHON_BIN_DEFAULT = DEV
+  ? (IS_WIN
+      ? path.join(V6_ROOT_DEFAULT, ".venv", "Scripts", "python.exe")
+      : path.join(V6_ROOT_DEFAULT, ".venv", "bin", "python"))
+  : path.join(PIPELINE_ROOT, "python-runtime", IS_WIN ? "python.exe" : "bin/python3");
+const PYTHON_BIN = process.env.PUPA_PYTHON || PYTHON_BIN_DEFAULT;
 const CNN_SCRIPT =
-  process.env.PUPA_SCRIPT || path.join(V6_ROOT_DEFAULT, "pupa_counter.py");
+  process.env.PUPA_SCRIPT || path.join(PIPELINE_ROOT, "pupa_counter.py");
 const CNN_DAEMON_SCRIPT =
-  process.env.PUPA_DAEMON || path.join(V6_ROOT_DEFAULT, "pupa_counter_daemon.py");
+  process.env.PUPA_DAEMON || path.join(PIPELINE_ROOT, "pupa_counter_daemon.py");
 
 // Inference config — points the daemon at the LiDE 300 model trained
 // 2026-05-01 (F1 = 99.66 % on the 6-scan self-eval). Override any of
 // these by exporting the same env var before launching the desktop app.
-const LIDE_MODEL = path.join(V6_ROOT_DEFAULT, "model", "pupa_counter_lide300.pt");
-const LIDE_CLF   = path.join(V6_ROOT_DEFAULT, "model", "peak_filter_clf_lide300.pkl");
+const LIDE_MODEL = path.join(PIPELINE_ROOT, "model", "pupa_counter_lide300.pt");
+const LIDE_CLF   = path.join(PIPELINE_ROOT, "model", "peak_filter_clf_lide300.pkl");
 const DAEMON_ENV = {
   PUPA_MODEL_PATH:   process.env.PUPA_MODEL_PATH   || LIDE_MODEL,
   PUPA_CLF_PATH:     process.env.PUPA_CLF_PATH     || LIDE_CLF,

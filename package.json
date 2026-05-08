@@ -1,6 +1,6 @@
 {
   "name": "pupa-counter-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Desktop app for the Long Lab pupa counter — scans, counts, manually edits, and persists pupae detections.",
   "private": true,
   "main": "electron/main.js",
@@ -39,7 +39,38 @@
       "dist/**/*",
       "electron/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../pupa_counter_v6/python-runtime",
+        "to": "python-pipeline/python-runtime"
+      },
+      {
+        "from": "../pupa_counter_v6/pupa_counter.py",
+        "to": "python-pipeline/pupa_counter.py"
+      },
+      {
+        "from": "../pupa_counter_v6/pupa_counter_daemon.py",
+        "to": "python-pipeline/pupa_counter_daemon.py"
+      },
+      {
+        "from": "../pupa_counter_v6/model",
+        "to": "python-pipeline/model",
+        "filter": [
+          "pupa_counter_lide300.pt",
+          "peak_filter_clf_lide300.pkl"
+        ]
+      }
+    ],
     "mac": { "category": "public.app-category.developer-tools" },
-    "win": { "target": "nsis" }
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }
