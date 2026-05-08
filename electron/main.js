@@ -389,7 +389,15 @@ app.on("before-quit", () => {
 // The PS scripts in electron/scanner/ shell out to WIA.DeviceManager and
 // print one JSON line on stdout. Any other stdout noise is tolerated — we
 // only parse the last non-empty line.
-const SCANNER_DIR = path.join(__dirname, "scanner");
+//
+// In the packaged build the scripts live inside app.asar (a virtual
+// archive PowerShell can't read). package.json's asarUnpack drops the
+// real files at app.asar.unpacked/ instead — translate __dirname so
+// powershell.exe -File sees a real on-disk path.
+const SCANNER_DIR = path.join(__dirname, "scanner").replace(
+  `${path.sep}app.asar${path.sep}`,
+  `${path.sep}app.asar.unpacked${path.sep}`,
+);
 const SCAN_OUT_DIR = () => path.join(app.getPath("userData"), "scans");
 
 function runScannerScript(scriptName, args) {
