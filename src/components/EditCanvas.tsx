@@ -77,14 +77,16 @@ export function EditCanvas({
     return Math.min(size.w / imageWidth, size.h / imageHeight);
   }, [size, imageWidth, imageHeight]);
 
-  // On image change or initial mount → fit.
+  // On image change or initial mount → start at 2.5× fit so pupae are
+  // visible at usable scale (LiDE 300 scans are paper-sized; fit-to-window
+  // makes individual pupae ~6 px tall, too small for accurate clicking).
   useEffect(() => {
     if (fitZoom <= 0) return;
-    setZoom(fitZoom);
-    // Center image in viewport initially.
+    const initialZoom = fitZoom * 2.5;
+    setZoom(initialZoom);
     setOffset({
-      x: (size.w - imageWidth * fitZoom) / 2,
-      y: (size.h - imageHeight * fitZoom) / 2,
+      x: (size.w - imageWidth * initialZoom) / 2,
+      y: (size.h - imageHeight * initialZoom) / 2,
     });
   }, [imageDataUrl, fitZoom, size.w, size.h, imageWidth, imageHeight]);
 
@@ -398,7 +400,7 @@ export function EditCanvas({
         <span className="sep">·</span>
         <span className="mono">{pupae.length} pupae</span>
         <span className="sep">·</span>
-        <span>left-click add · right-click delete · ⌘Z undo · F fit · T/B top/bottom</span>
+        <span>L-click add · R-click delete · +/− zoom · ←↑↓→ pan · F fit · T/B top/bot · ⌘Z undo</span>
       </div>
     </div>
   );

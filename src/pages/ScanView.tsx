@@ -42,6 +42,20 @@ export function ScanView({ onNavigate, onToast }: Props) {
   >(null);
   const [originalCnn, setOriginalCnn] = useState<Pupa[] | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  // Collapsible sidebars — persisted to localStorage so the layout
+  // sticks across reloads. Default to expanded for first-time users.
+  const [leftCollapsed, setLeftCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("scanview.leftCollapsed") === "1"; } catch { return false; }
+  });
+  const [rightCollapsed, setRightCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("scanview.rightCollapsed") === "1"; } catch { return false; }
+  });
+  React.useEffect(() => {
+    try { localStorage.setItem("scanview.leftCollapsed", leftCollapsed ? "1" : "0"); } catch {}
+  }, [leftCollapsed]);
+  React.useEffect(() => {
+    try { localStorage.setItem("scanview.rightCollapsed", rightCollapsed ? "1" : "0"); } catch {}
+  }, [rightCollapsed]);
 
   const state: "empty" | "processing" | "detected" =
     !pendingScan ? "empty" : pendingScan.detection ? "detected" : "processing";
@@ -195,11 +209,33 @@ export function ScanView({ onNavigate, onToast }: Props) {
   const cnnRemaining = currentPupae.filter((p) => p.source === "cnn").length;
   const removed = Math.max(0, cnnOriginalCount - cnnRemaining);
   const countForThisScan = currentPupae.length;
-  const top5Count = det?.counts.top5Pct ?? 0;
+
+  // Count-based banding: sort by image y (smaller y = top of image), then
+  // top 5% by COUNT (round) goes to the top band, bottom 5% to the bottom
+  // band, and the rest to middle. Concrete: 100 pupae → 5 / 90 / 5.
+  // 23 pupae → 1 / 21 / 1. A scan with 0 pupae has all bands 0.
+  const top5N = countForThisScan > 0 ? Math.max(1, Math.round(countForThisScan * 0.05)) : 0;
+  const bottom5N = countForThisScan > 0 ? Math.max(1, Math.round(countForThisScan * 0.05)) : 0;
+  const middleN = Math.max(0, countForThisScan - top5N - bottom5N);
 
   return (
-    <div className="s1-body">
-      <aside className="sidebar">
+    <div
+      className="s1-body"
+      style={{
+        gridTemplateColumns:
+          `${leftCollapsed ? "36px" : "240px"} 1fr ${rightCollapsed ? "36px" : "420px"}`,
+      }}
+    >
+      <aside className={`sidebar${leftCollapsed ? " collapsed" : ""}`}>
+        <button
+          className="sidebar-toggle sidebar-toggle-left"
+          onClick={() => setLeftCollapsed((v) => !v)}
+          title={leftCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={leftCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {leftCollapsed ? "›" : "‹"}
+        </button>
+        {leftCollapsed ? null : (<>
         <div className="side-section">
           <div className="label">Session</div>
           <dl className="session-card">
@@ -223,6 +259,7 @@ export function ScanView({ onNavigate, onToast }: Props) {
         <button className="btn btn-ghost" style={{ justifyContent: "center", marginTop: 4 }} onClick={handleLoadDemo}>
           Load demo scan
         </button>
+        </>)}
       </aside>
 
       <section className="middle">
@@ -369,7 +406,16 @@ export function ScanView({ onNavigate, onToast }: Props) {
         </div>
       </section>
 
-      <aside className="right">
+      <aside className={`right${rightCollapsed ? " collapsed" : ""}`}>
+        <button
+          className="sidebar-toggle sidebar-toggle-right"
+          onClick={() => setRightCollapsed((v) => !v)}
+          title={rightCollapsed ? "Expand panel" : "Collapse panel"}
+          aria-label={rightCollapsed ? "Expand panel" : "Collapse panel"}
+        >
+          {rightCollapsed ? "‹" : "›"}
+        </button>
+        {rightCollapsed ? null : (<>
         <div className="card form-card">
           <div className="card-head">
             <div className="card-title">Image information</div>
@@ -438,10 +484,24 @@ export function ScanView({ onNavigate, onToast }: Props) {
             </div>
             <div className="stat-row">
               <div className="label-col">
-                <span className="l">Rank 0–5% (top)</span>
-                <span className="s">Pupae at image bottom</span>
+                <span className="l">Top 5%</span>
+                <span className="s">Top {top5N} pupae by image position</span>
               </div>
-              <div className="n accent">{top5Count}</div>
+              <div className="n accent">{top5N}</div>
+            </div>
+            <div className="stat-row">
+              <div className="label-col">
+                <span className="l">Middle 90%</span>
+                <span className="s">Remaining pupae between top &amp; bottom bands</span>
+              </div>
+              <div className="n">{middleN}</div>
+            </div>
+            <div className="stat-row">
+              <div className="label-col">
+                <span className="l">Bottom 5%</span>
+                <span className="s">Bottom {bottom5N} pupae by image position</span>
+              </div>
+              <div className="n accent">{bottom5N}</div>
             </div>
             <div className="stat-row">
               <div className="label-col">
@@ -468,6 +528,7 @@ export function ScanView({ onNavigate, onToast }: Props) {
           style={{ justifyContent: "center", padding: "10px 14px", fontSize: 13 }}>
           {Icons.check} Save to database
         </button>
+        </>)}
       </aside>
     </div>
   );
